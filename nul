@@ -1,0 +1,19 @@
+[ 18%] Built target civetweb
+[ 27%] Building CXX object CMakeFiles/core_static.dir/core/starter.cpp.o
+[ 36%] Linking CXX static library libcore_static.a
+[ 45%] Built target core_static
+[ 54%] Linking CXX executable /home/fyonietz/Repo/Phoenix/Phoenix
+[ 63%] Built target Phoenix
+[ 72%] Building CXX object routes/CMakeFiles/routes.dir/__/pages/about.cpp.o
+In file included from /home/fyonietz/Repo/Phoenix/pages/about.cpp:1:
+/home/fyonietz/Repo/Phoenix/pages/handler.hpp:22:27: warning: backslash-newline at end of file
+   22 | #define route(PATH, NAME) \
+      |                            
+[ 81%] Building CXX object routes/CMakeFiles/routes.dir/__/pages/home.cpp.o
+In file included from /home/fyonietz/Repo/Phoenix/pages/home.cpp:1:
+/home/fyonietz/Repo/Phoenix/pages/handler.hpp:22:27: warning: backslash-newline at end of file
+   22 | #define route(PATH, NAME) \
+      |                            
+[ 90%] Linking CXX shared library /home/fyonietz/Repo/Phoenix/core/libroutes.so
+Copying routes library to core directory
+[100%] Built target routes

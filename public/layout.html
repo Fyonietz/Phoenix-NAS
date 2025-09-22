@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    @meta(title="Phoenix")
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title}</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    @meta;
+</head>
+<body>
+     @header(title="Default Title", subtitle="Default Subtitle") 
+        <header><h1>Default Title</h1><p>Default Subtitle</p></header> 
+@header;
+      @nav(href="/about",title="About")
+        <a href=/about>About</a>
+@nav;
+        @menus  
+        <h2>Phoenix Layout.html</h2>  
+@menus;
+        @main_button(title="Dashboard")
+        <button class="test">Dashboard</button>
+@main_button;
+        @footer 
+        <h2>footer</h2> 
+@footer;
+</body>
+</html>

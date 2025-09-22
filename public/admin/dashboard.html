@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body x-data="dashboard()" x-init="init()" class="bg-gray-100">
+
+  <!-- Mobile Header -->
+  <header class="md:hidden fixed top-0 left-0 right-0 bg-white p-4 shadow z-40 flex justify-between items-center">
+    <h1 class="text-xl font-semibold text-indigo-600">Admin Panel</h1>
+    <button @click="sidebarOpen = !sidebarOpen" class="text-gray-600 focus:outline-none">
+      <!-- Hamburger Icon -->
+      <svg x-show="!sidebarOpen" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+      <!-- Close Icon -->
+      <svg x-show="sidebarOpen" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+           viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
+  </header>
+
+  <!-- Sidebar -->
+  <aside
+    class="fixed top-0 left-0 h-screen w-64 bg-white shadow-lg p-6 z-50 transform transition-transform duration-200 ease-in-out md:translate-x-0"
+    :class="{ '-translate-x-full': !sidebarOpen }"
+    x-show="sidebarOpen || window.innerWidth >= 768"
+    @resize.window="sidebarOpen = window.innerWidth >= 768"
+    @click.outside="if(window.innerWidth < 768) sidebarOpen = false"
+  >
+    <h2 class="text-2xl font-bold mb-6 text-indigo-600">Admin Panel</h2>
+    <nav class="flex flex-col space-y-3">
+      <button @click="changeView('dashboard')" :class="navClass('dashboard')">Dashboard</button>
+      <button @click="changeView('users')" :class="navClass('users')">Users</button>
+      <button @click="changeView('settings')" :class="navClass('settings')">Settings</button>
+      <button @click="changeView('about')" :class="navClass('about')">About</button>
+    </nav>
+    <div class="mt-auto text-xs text-gray-400 pt-6">
+      &copy; 2025 Your Company
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="ml-0 md:ml-64 flex flex-col min-h-screen pt-16 md:pt-0">
+    <main class="flex-1 overflow-y-auto p-8 pb-24">
+      <!-- Dashboard -->
+      <template x-if="currentView === 'dashboard'">
+        <section>
+         <h1 class="text-3xl font-bold mb-4">Dashboard Overview</h1>
+          <p>Welcome to your admin dashboard! Here is a summary of your system.</p>
+          <!-- Example cards -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white rounded shadow p-4">
+              <h3 class="font-semibold text-lg">Users</h3>
+              <p class="text-2xl mt-2">1,234</p>
+              <p class="text-sm text-gray-500 mt-1">Active users in the last month</p>
+            </div>
+            <div class="bg-white rounded shadow p-4">
+              <h3 class="font-semibold text-lg">Revenue</h3>
+              <p class="text-2xl mt-2">$45,678</p>
+              <p class="text-sm text-gray-500 mt-1">Total revenue this quarter</p>
+            </div>
+            <div class="bg-white rounded shadow p-4">
+              <h3 class="font-semibold text-lg">Performance</h3>
+              <p class="text-2xl mt-2">87%</p>
+              <p class="text-sm text-gray-500 mt-1">System uptime this month</p>
+            </div>
+          </div>
+          <div class="bg-white rounded shadow p-6 mt-6">
+            <h2 class="text-xl font-semibold mb-3">Recent Activity</h2>
+            <ul class="list-disc list-inside space-y-2 text-gray-700">
+              <li>User Alice updated her profile</li>
+              <li>New user Bob Smith registered</li>
+              <li>System backup completed successfully</li>
+              <li>Settings updated for email notifications</li>
+              <li>Monthly report generated</li>
+              <li>User Carol White reset her password</li>
+              <li>New admin permissions assigned to Alice</li>
+              <li>Server maintenance scheduled</li>
+              <li>Performance metrics reviewed</li>
+              <li>Security audit completed</li>
+            </ul>
+          </div>        </section>
+      </template>
+
+      <!-- Users -->
+      <template x-if="currentView === 'users'">
+        <section>
+          <h1 class="text-3xl font-bold mb-4">User Management</h1>
+          <div class="overflow-auto">
+            <table class="w-full border text-left text-sm mt-4">
+              <thead class="bg-indigo-100">
+                <tr>
+                  <th class="p-2 border">ID</th>
+                  <th class="p-2 border">Name</th>
+                  <th class="p-2 border">Email</th>
+                  <th class="p-2 border">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="user in users" :key="user.id">
+                  <tr class="hover:bg-indigo-50">
+                    <td class="p-2 border" x-text="user.id"></td>
+                    <td class="p-2 border" x-text="user.name"></td>
+                    <td class="p-2 border" x-text="user.email"></td>
+                    <td class="p-2 border" x-text="user.role"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </template>
+
+      <!-- Settings -->
+      <template x-if="currentView === 'settings'">
+        <section class="max-w-md">
+          <h1 class="text-3xl font-bold mb-4">Settings</h1>
+          <form class="space-y-4">
+            <div>
+              <label class="block font-semibold">Email Notifications</label>
+              <input type="checkbox" x-model="settings.emailNotifications" class="mr-2">
+              Enable email notifications
+            </div>
+            <div>
+              <label class="block font-semibold">Auto Updates</label>
+              <input type="checkbox" x-model="settings.autoUpdates" class="mr-2">
+              Enable automatic updates
+            </div>
+            <div>
+              <label class="block font-semibold">Timezone</label>
+              <select x-model="settings.timezone" class="w-full border rounded px-2 py-1">
+                <option value="UTC">UTC</option>
+                <option value="PST">PST</option>
+                <option value="EST">EST</option>
+              </select>
+            </div>
+            <button @click.prevent="saveSettings"
+              class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save</button>
+          </form>
+        </section>
+      </template>
+
+      <!-- About -->
+      <template x-if="currentView === 'about'">
+        <section>
+          <h1 class="text-3xl font-bold mb-4">About</h1>
+          <p>This is a simple admin panel built with Tailwind CSS and Alpine.js.</p>
+        </section>
+      </template>
+    </main>
+
+    <!-- Footer -->
+    <footer class="fixed bottom-0 left-0 md:left-64 right-0 bg-white p-4 text-center text-sm text-gray-500 shadow-inner z-40">
+      &copy; 2025 Your Company. All rights reserved.
+    </footer>
+  </div>
+
+  <!-- Alpine.js Component -->
+  <script>
+    function dashboard() {
+      return {
+        currentView: 'dashboard',
+        sidebarOpen: window.innerWidth >= 768,
+        users: [
+          { id: 1, name: 'Alice Johnson', email: 'alice@example.com', role: 'Admin' },
+          { id: 2, name: 'Bob Smith', email: 'bob@example.com', role: 'Editor' },
+          { id: 3, name: 'Carol White', email: 'carol@example.com', role: 'Subscriber' },
+        ],
+        newUser: { name: '', email: '', role: 'Subscriber' },
+        settings: {
+          emailNotifications: true,
+          autoUpdates: false,
+          timezone: 'UTC',
+        },
+        changeView(view) {
+          this.currentView = view;
+          if (window.innerWidth < 768) this.sidebarOpen = false;
+        },
+        saveSettings() {
+          alert('Settings saved!\n' + JSON.stringify(this.settings, null, 2));
+        },
+        init() {
+          this.sidebarOpen = window.innerWidth >= 768;
+          window.addEventListener('resize', () => {
+            this.sidebarOpen = window.innerWidth >= 768;
+          });
+        },
+        navClass(view) {
+          return `text-left px-4 py-2 rounded transition hover:bg-indigo-100 ${this.currentView === view ? 'bg-indigo-200 font-semibold' : ''}`;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
+
