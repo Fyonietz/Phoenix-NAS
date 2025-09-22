@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" x-data="mediaExplorer()" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Media Viewer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+</head>
+<body class="h-full bg-gray-100 text-gray-800">
+<div class="h-screen flex flex-col md:flex-row" x-data="mediaExplorer()">
+  <!-- Desktop Sidebar -->
+  <div class="hidden md:block md:w-1/5 bg-white border-r overflow-auto p-4">
+    <h2 class="text-lg font-semibold mb-4">Folder Tree</h2>
+    <div x-html="treeHtml" class="text-sm leading-6"></div>
+  </div>
+
+  <!-- Mobile: Show button to open folder picker -->
+  <div class="md:hidden p-4 bg-white border-b">
+    <button @click="showMobileTree = true" class="bg-blue-600 text-white px-4 py-2 rounded shadow">
+      Select File
+    </button>
+  </div>
+
+  <!-- Right Preview Panel -->
+  <div class="flex-1 p-4 overflow-auto">
+    <template x-if="selectedFile">
+      <div>
+        <h2 class="text-lg font-semibold mb-4">Preview: <span x-text="selectedFile"></span></h2>
+
+        <template x-if="isImage(selectedFile)">
+          <img :src="selectedFile" alt="Preview" class="max-w-full max-h-[500px] border rounded shadow" />
+        </template>
+
+        <template x-if="isVideo(selectedFile)">
+          <video :src="selectedFile" controls class="w-full max-w-2xl max-h-[500px] border rounded shadow"></video>
+        </template>
+
+        <template x-if="isGLB(selectedFile)">
+          <model-viewer
+            :src="selectedFile"
+            alt="GLB Model"
+            auto-rotate
+            camera-controls
+            background-color="#ffffff"
+            class="w-full h-[500px] border rounded shadow"
+          ></model-viewer>
+        </template>
+      </div>
+    </template>
+
+    <template x-if="!selectedFile">
+      <p class="text-gray-500">Select a media file to preview it.</p>
+    </template>
+  </div>
+
+  <!-- Mobile Folder Picker Modal -->
+  <div
+    class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4"
+    x-show="showMobileTree"
+    x-transition
+  >
+    <div class="bg-white w-full max-w-md rounded-lg shadow-lg overflow-auto max-h-[90vh]">
+      <div class="p-4 border-b flex justify-between items-center">
+        <h3 class="font-semibold text-lg">Select File</h3>
+        <button @click="showMobileTree = false" class="text-gray-500 hover:text-gray-700">&times;</button>
+      </div>
+      <div class="p-4 text-sm">
+        <div x-html="treeHtml"></div>
+      </div>
+    </div>
+  </div>
+</div>
+  <script>
+    function mediaExplorer() {
+      return {
+        treeHtml: '',
+        selectedFile: null,
+        showMobileTree: false,
+
+        async init() {
+          const res = await fetch('/api/folder/lists');
+          const data = await res.json();
+          const root = data.find(d => d.type === 'directory');
+          this.treeHtml = this.buildTreeHTML(root);
+        },
+
+        buildTreeHTML(node, parentPath = '') {
+          if (!node || !node.contents) return '';
+
+          let html = '<ul class="ml-4 border-l border-dotted border-gray-300 pl-2">';
+          node.contents.forEach(child => {
+            const fullPath = `${parentPath}/${child.name}`;
+            if (child.type === 'directory') {
+              html += `
+                <li class="mt-1">
+                  <div @click="$el.nextElementSibling.classList.toggle('hidden')" class="cursor-pointer font-medium">
+                    ▶ ${child.name}
+                  </div>
+                  <div class="hidden">
+                    ${this.buildTreeHTML(child, fullPath)}
+                  </div>
+                </li>
+              `;
+            } else if (this.isMediaFile(child.name)) {
+              html += `
+                <li class="cursor-pointer mt-1 hover:text-blue-600" @click="selectedFile='/nas${fullPath}'">
+                  📄 ${child.name}
+                </li>
+              `;
+            }
+          });
+          html += '</ul>';
+          return html;
+        },
+
+        isMediaFile(filename) {
+          const ext = filename.toLowerCase();
+          return (
+            ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.gif') ||
+            ext.endsWith('.webp') || ext.endsWith('.bmp') || ext.endsWith('.svg') ||
+            ext.endsWith('.mp4') || ext.endsWith('.webm') || ext.endsWith('.mov') ||
+            ext.endsWith('.glb')
+          );
+        },
+
+        isImage(file) {
+          return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file);
+        },
+
+        isVideo(file) {
+          return /\.(mp4|webm|mov)$/i.test(file);
+        },
+
+        isGLB(file) {
+          return /\.glb$/i.test(file);
+        }
+      };
+    }
+  </script>
+</body>
+</html>
+

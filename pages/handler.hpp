@@ -12,6 +12,7 @@
 #else   
     #define EXPORT __attribute__((visibility("default")))
 #endif
+#define OK(conn) Server.Response(conn, 200, "Ok", R"({"message":"success"})")
 extern Pnix Server;
 extern Global test;
 extern const std::string DATABASE;
