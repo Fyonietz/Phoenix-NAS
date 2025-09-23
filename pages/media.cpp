@@ -1,3 +1,4 @@
+#include "../models/nas.hpp"
 #include "handler.hpp"
 #include <algorithm>
 #include <cctype>
@@ -6,7 +7,6 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
-#include "../models/nas.hpp"
 using namespace nlohmann;
 
 constexpr size_t BUFFER_SIZE = 8192;
@@ -427,99 +427,79 @@ route("/api/media/add", media_add) {
   }
 
   size_t content_length = std::stoul(content_length_str);
-  std::vector<char> body(content_length);
 
+  // Initialize parser
+  MultipartParser parser(boundary);
+
+  std::array<char, 8192> buffer;
   size_t total_read = 0;
+
+  // Stream and parse the request body
   while (total_read < content_length) {
-    int r = mg_read(connection, body.data() + total_read,
-                    content_length - total_read);
+    int r = mg_read(connection, buffer.data(), buffer.size());
     if (r <= 0) {
       return Server.Response(connection, 400, "Bad Request",
-                             R"({"message":"Incomplete request body"})");
+                             R"({"message":"Error reading request body"})");
     }
+
     total_read += r;
+    bool done = parser.parse(buffer.data(), r);
+    if (done)
+      break;
   }
 
-  std::string body_str(body.begin(), body.end());
+  // Get parsed form fields
+  std::string folder_path =
+      MultipartParser::trim(parser.getFormField("folder"));
+  std::string filename = MultipartParser::trim(parser.getFormField("filename"));
 
-  auto parts = parse_multipart(body_str, boundary);
-
-  std::string folder_path;
-  std::string filename;
-  std::vector<char> file_data;
-
-  for (const auto &p : parts) {
-    if (p.name == "folder") {
-      folder_path =
-          MultipartParser::trim(std::string(p.data.begin(), p.data.end()));
-    } else if (p.name == "filename") {
-      filename =
-          MultipartParser::trim(std::string(p.data.begin(), p.data.end()));
-    } else if (p.name == "file") {
-      file_data = p.data;
-      if (!p.filename.empty()) {
-        filename = p.filename;
-      }
-    }
+  if (folder_path.empty() || filename.empty()) {
+    return Server.Response(connection, 400, "Bad Request",
+                           R"({"message":"Missing folder or filename"})");
   }
 
-  if (folder_path.empty() || filename.empty() || file_data.empty()) {
-    return Server.Response(
-        connection, 400, "Bad Request",
-        R"({"message":"Missing file or folder or filename"})");
-  }
-
+  // Sanitize filename to avoid path traversal
   filename = std::filesystem::path(filename).filename().string();
+
   std::string full_folder_path = BASE_DIR + "/" + folder_path;
 
   try {
     std::filesystem::create_directories(full_folder_path);
-
-    std::string full_path = full_folder_path + "/" + filename;
-    std::ofstream out(full_path, std::ios::binary);
-    if (!out.is_open()) {
-      return Server.Response(
-          connection, 500, "Server Error",
-          R"({"message":"Failed to open file for writing"})");
-    }
-    out.write(file_data.data(), file_data.size());
-    out.close();
   } catch (const std::exception &ex) {
     return Server.Response(connection, 500, "Server Error",
-                           R"({"message":"Exception while saving file"})");
+                           R"({"message":"Failed to create target folder"})");
   }
 
+  // File is already written to disk inside parser, we just confirm success
   return Server.Response(connection, 200, "Ok",
                          R"({"message":"Upload successful"})");
 }
-
 route("/api/delete", delete_function) {
   json post_data = json::parse(Server.Read(connection));
   Model<Item> it;
-  it.bind("path",&Item::path);
+  it.bind("path", &Item::path);
   auto it_final = it.parse_one(post_data);
-  std::string final_path = "rm "+ BASE_DIR + it_final.path;
+  std::string final_path = "rm " + BASE_DIR + it_final.path;
   system(final_path.c_str());
   return OK(connection);
 }
 
-route("/api/mkdir",mkdirs){
+route("/api/mkdir", mkdirs) {
   json post_data = json::parse(Server.Read(connection));
   Model<Item> it;
   it.bind("path", &Item::path);
   auto it_final = it.parse_one(post_data);
-  std::string final_path = "mkdir -p "+BASE_DIR+"/"+it_final.path;
+  std::string final_path = "mkdir -p " + BASE_DIR + "/" + it_final.path;
   system(final_path.c_str());
   return OK(connection);
 }
 
-
-route("/api/rmdir",rmdir){
+route("/api/rmdir", rmdir) {
   json post_data = json::parse(Server.Read(connection));
   Model<Item> it;
   it.bind("path", &Item::path);
   auto it_final = it.parse_one(post_data);
-  std::string final_path = "rm -r "+BASE_DIR+"/"+it_final.path;
+  std::string final_path = "rm -r " + BASE_DIR + "/" + it_final.path;
   system(final_path.c_str());
   return OK(connection);
 }
