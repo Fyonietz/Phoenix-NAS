@@ -1,12 +1,16 @@
 #include "handler.hpp"
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include "../models/nas.hpp"
+using namespace nlohmann;
 
 constexpr size_t BUFFER_SIZE = 8192;
+std::string BASE_DIR = "public/nas";
 struct Part {
   std::string name;
   std::string filename; // optional
@@ -59,7 +63,7 @@ public:
       --end;
     return s.substr(start, end - start);
   }
- static void parseContentDisposition(const std::string &val, std::string &name,
+  static void parseContentDisposition(const std::string &val, std::string &name,
                                       std::string &filename) {
     name.clear();
     filename.clear();
@@ -105,7 +109,6 @@ public:
     }
   }
 
-
 private:
   enum class State { EXPECT_BOUNDARY, READ_HEADERS, READ_DATA, DONE };
 
@@ -124,8 +127,6 @@ private:
 
   std::unordered_map<std::string, std::string> form_fields;
 
-
-
   // Helper: parse header line "Key: Value"
   static bool parseHeaderLine(const std::string &line, std::string &key,
                               std::string &value) {
@@ -141,7 +142,7 @@ private:
 
   // Parse Content-Disposition header params: name="fieldname";
   // filename="filename"
-   // Consume boundary line from buffer; returns true if more parsing possible
+  // Consume boundary line from buffer; returns true if more parsing possible
   bool consumeBoundary() {
     // boundary line is boundary_str or close_boundary followed by \r\n
     size_t pos = buffer.find("\r\n");
@@ -395,11 +396,11 @@ route("/api/folder/lists", path) {
 }
 
 route("/nas/media/view", media_view) {
-  Server.SSR("public/admin/media.htpp", connection);
+  Server.static_serve("public/admin/media.htpp", connection);
   return OK(connection);
 }
 route("/nas/media/add", media_upload) {
-  Server.SSR("public/admin/upload.htpp", connection);
+  Server.static_serve("public/admin/upload.htpp", connection);
   return OK(connection);
 }
 route("/api/media/add", media_add) {
@@ -469,8 +470,7 @@ route("/api/media/add", media_add) {
   }
 
   filename = std::filesystem::path(filename).filename().string();
-  std::string base_dir = "public/nas"; // adjust base path if needed
-  std::string full_folder_path = base_dir + "/" + folder_path;
+  std::string full_folder_path = BASE_DIR + "/" + folder_path;
 
   try {
     std::filesystem::create_directories(full_folder_path);
@@ -491,4 +491,35 @@ route("/api/media/add", media_add) {
 
   return Server.Response(connection, 200, "Ok",
                          R"({"message":"Upload successful"})");
+}
+
+route("/api/delete", delete_function) {
+  json post_data = json::parse(Server.Read(connection));
+  Model<Item> it;
+  it.bind("path",&Item::path);
+  auto it_final = it.parse_one(post_data);
+  std::string final_path = "rm "+ BASE_DIR + it_final.path;
+  system(final_path.c_str());
+  return OK(connection);
+}
+
+route("/api/mkdir",mkdirs){
+  json post_data = json::parse(Server.Read(connection));
+  Model<Item> it;
+  it.bind("path", &Item::path);
+  auto it_final = it.parse_one(post_data);
+  std::string final_path = "mkdir -p "+BASE_DIR+"/"+it_final.path;
+  system(final_path.c_str());
+  return OK(connection);
+}
+
+
+route("/api/rmdir",rmdir){
+  json post_data = json::parse(Server.Read(connection));
+  Model<Item> it;
+  it.bind("path", &Item::path);
+  auto it_final = it.parse_one(post_data);
+  std::string final_path = "rm -r "+BASE_DIR+"/"+it_final.path;
+  system(final_path.c_str());
+  return OK(connection);
 }
