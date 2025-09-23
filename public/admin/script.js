@@ -44,30 +44,7 @@
           } catch (err) {
             console.error(err);
             // Create mock data for demonstration
-            this.treeData = {
-              name: "root",
-              type: "directory",
-              contents: [
-                {
-                  name: "Documents",
-                  type: "directory",
-                  contents: [
-                    { name: "Projects", type: "directory", contents: [] },
-                    { name: "Archive", type: "directory", contents: [] }
-                  ]
-                },
-                {
-                  name: "Images",
-                  type: "directory",
-                  contents: [
-                    { name: "Photos", type: "directory", contents: [] },
-                    { name: "Screenshots", type: "directory", contents: [] }
-                  ]
-                },
-                { name: "Videos", type: "directory", contents: [] }
-              ]
-            };
-          }
+                      }
         },
 
         onFileChange(event) {
