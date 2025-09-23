@@ -1,3 +1,171 @@
+// Alpine.js global dashboard component
+document.addEventListener('alpine:init', () => {
+  Alpine.data('dashboard', () => ({
+    currentView: 'dashboard',
+    sidebarOpen: window.innerWidth >= 768,
+    newFolderPath: '',
+    uploading: false,
+
+    navClass(view) {
+      return this.currentView === view
+        ? 'bg-indigo-100 text-indigo-700 font-semibold rounded px-2 py-1'
+        : 'text-gray-700 hover:bg-gray-100 rounded px-2 py-1';
+    },
+
+    changeView(view) {
+      this.currentView = view;
+      if (window.innerWidth < 768) this.sidebarOpen = false;
+    },
+
+    init() {
+      this.sidebarOpen = window.innerWidth >= 768;
+      window.addEventListener('resize', () => {
+        this.sidebarOpen = window.innerWidth >= 768;
+      });
+    },
+
+    async makeDirectory() {
+      const path = this.newFolderPath.trim();
+      if (!path) {
+        alert("Please enter a valid folder path.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/mkdir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path })
+        });
+
+        if (res.ok) {
+          alert("✅ Folder created successfully.");
+          this.newFolderPath = '';
+
+          // Refresh folder trees in both uploadExplorer and directoryManager if they exist
+          if (window.uploadExplorerRef?.refreshTree instanceof Function) {
+            await window.uploadExplorerRef.refreshTree();
+          }
+          if (window.directoryManagerRef?.loadFolders instanceof Function) {
+            await window.directoryManagerRef.loadFolders();
+          }
+
+        } else {
+          const error = await res.text();
+          alert("❌ Failed to create folder: " + error);
+        }
+      } catch (err) {
+        alert("❌ Error: " + err.message);
+      }
+    }
+  }));
+
+  Alpine.data('uploadExplorer', (root) => ({
+    selectedFolder: null,
+    fileToUpload: null,
+    localFilePreview: null,
+    showFolderPicker: false,
+    treeData: null,
+    dragOver: false,
+
+    get uploading() {
+      return root.uploading;
+    },
+    set uploading(val) {
+      root.uploading = val;
+    },
+
+    async init() {
+      window.uploadExplorerRef = this;
+      await this.refreshTree();
+    },
+
+    async refreshTree() {
+      try {
+        const res = await fetch('/api/folder/lists');
+        const data = await res.json();
+        this.treeData = Array.isArray(data) ? (data.find(item => item.type === 'directory') || { contents: [] }) : { contents: [] };
+      } catch (err) {
+        console.error("Failed to refresh folder list:", err);
+        this.treeData = { contents: [] };
+      }
+    },
+
+    onFileChange(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.fileToUpload = file;
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        this.localFilePreview = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    },
+
+    handleDrop(event) {
+      this.dragOver = false;
+      const files = event.dataTransfer.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      this.fileToUpload = file;
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        this.localFilePreview = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    },
+
+    async uploadFile() {
+      if (!this.fileToUpload || !this.selectedFolder) {
+        alert('Please select a folder and file to upload.');
+        return;
+      }
+
+      const form = new FormData();
+      form.append('file', this.fileToUpload);
+      form.append('folder', this.selectedFolder);
+      form.append('filename', this.fileToUpload.name);
+
+      this.uploading = true;
+
+      try {
+        const res = await fetch('/api/media/add', {
+          method: 'POST',
+          body: form,
+        });
+        const result = await res.json();
+        if (res.ok) {
+          alert('✅ Upload successful!');
+          this.fileToUpload = null;
+          this.localFilePreview = null;
+          await this.refreshTree();
+          const fileInput = document.querySelector('input[type="file"]');
+          if (fileInput) fileInput.value = '';
+        } else {
+          alert('❌ Upload failed: ' + (result.message || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('❌ Upload error: ' + err.message);
+      } finally {
+        this.uploading = false;
+      }
+    },
+
+    isImage() {
+      return this.fileToUpload && /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(this.fileToUpload.name);
+    },
+
+    isVideo() {
+      return this.fileToUpload && /\.(mp4|webm|mov)$/i.test(this.fileToUpload.name);
+    },
+
+    isGLB() {
+      return this.fileToUpload && /\.glb$/i.test(this.fileToUpload.name);
+    }
+  }));
+});
 // Alpine.js component for individual folder items
     document.addEventListener('alpine:init', () => {
       Alpine.data('folderItem', (folder, basePath, rootData) => ({
