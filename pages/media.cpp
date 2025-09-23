@@ -11,22 +11,116 @@ using namespace nlohmann;
 
 constexpr size_t BUFFER_SIZE = 8192;
 std::string BASE_DIR = "public/nas";
+// Helper function to trim whitespace
+static std::string trim(const std::string& s) {
+    auto start = s.begin();
+    while (start != s.end() && std::isspace(*start)) {
+        start++;
+    }
+    auto end = s.rbegin();
+    while (end != s.rend() && std::isspace(*end)) {
+        end++;
+    }
+    return std::string(start, end.base());
+}
+
 struct Part {
-  std::string name;
-  std::string filename; // optional
-  std::vector<char> data;
+    std::string name;
+    std::string filename; // optional
+    std::vector<char> data;
+};
+
+// Simple multipart form data parser
+class FormDataParser {
+private:
+    std::unordered_map<std::string, std::string> form_fields;
+    std::string current_field_name;
+    std::string current_field_value;
+    bool is_file;
+    
+public:
+    FormDataParser() : is_file(false) {}
+    
+    void parseHeader(const std::string& header) {
+        
+        if (header.find("Content-Disposition: form-data;") != std::string::npos) {
+            size_t name_pos = header.find("name=\"");
+            if (name_pos != std::string::npos) {
+                name_pos += 6;
+                size_t name_end = header.find('\"', name_pos);
+                if (name_end != std::string::npos) {
+                    current_field_name = header.substr(name_pos, name_end - name_pos);
+                }
+            }
+            is_file = (header.find("filename=\"") != std::string::npos);
+        }
+    }
+    
+    void addData(const std::string& data) {
+        if (!is_file && !current_field_name.empty()) {
+            current_field_value += data;
+        }
+    }
+    
+    void fieldComplete() {
+        if (!current_field_name.empty() && !is_file) {
+            while (!current_field_value.empty() && 
+                   (current_field_value.back() == '\n' || current_field_value.back() == '\r')) {
+                current_field_value.pop_back();
+            }
+            form_fields[current_field_name] = current_field_value;
+        }
+        current_field_name.clear();
+        current_field_value.clear();
+        is_file = false;
+    }
+    
+    const std::string& getField(const std::string& name) const {
+        static const std::string empty;
+        auto it = form_fields.find(name);
+        return it != form_fields.end() ? it->second : empty;
+    }
 };
 
 class MultipartParser {
-public:
-  MultipartParser(const std::string &boundary)
-      : boundary_str("--" + boundary), close_boundary("--" + boundary + "--"),
-        state(State::EXPECT_BOUNDARY), file_open(false) {}
+private:
+    enum class State {
+        EXPECT_BOUNDARY,
+        READ_HEADERS,
+        READ_DATA,
+        DONE
+    };
 
-  // Call this repeatedly as you read chunks from the socket
-  // data points to buffer, length is bytes read
-  // Returns true if finished parsing all parts
+    std::string buffer;
+    std::string boundary_str;
+    std::string close_boundary;
+    State state;
+    bool file_open;
+    std::ofstream outfile;
+    std::string current_name;
+    std::string current_filename;
+    std::unordered_map<std::string, std::string> current_headers;
+    std::unordered_map<std::string, std::string> form_fields;
+
+public:
+    MultipartParser(const std::string &boundary)
+        : boundary_str("--" + boundary),
+          close_boundary("--" + boundary + "--"),
+          state(State::EXPECT_BOUNDARY),
+          file_open(false) {}
+
+    const std::string& getFormField(const std::string &name) const {
+        static const std::string empty;
+        auto it = form_fields.find(name);
+        return it != form_fields.end() ? it->second : empty;
+    }
+
+    // Call this repeatedly as you read chunks from the socket
+    // data points to buffer, length is bytes read
+    // Returns true if finished parsing all parts
   bool parse(const char *data, size_t length) {
+    if (data == nullptr || length == 0) return false;
+    
     buffer.append(data, length);
 
     while (true) {
@@ -46,14 +140,58 @@ public:
     return false;
   }
 
-  // Get parsed form field value by name
-  const std::string &getFormField(const std::string &name) const {
-    static const std::string empty;
-    auto it = form_fields.find(name);
-    return it != form_fields.end() ? it->second : empty;
+  static void parseContentDisposition(const std::string &val, std::string &name,
+                                      std::string &filename) {
+    name.clear();
+    filename.clear();
+
+
+    // Split header value into parts by semicolon
+    std::vector<std::string> parts;
+    std::string current;
+    bool in_quotes = false;
+    
+    for (char c : val) {
+      if (c == '"') {
+        in_quotes = !in_quotes;
+      } else if (c == ';' && !in_quotes) {
+        if (!current.empty()) {
+          parts.push_back(trim(current));
+          current.clear();
+        }
+      } else {
+        current += c;
+      }
+    }
+    if (!current.empty()) {
+      parts.push_back(trim(current));
+    }
+
+    // Process each part
+    for (const auto& part : parts) {
+      
+      size_t eq = part.find('=');
+      if (eq != std::string::npos) {
+        std::string param_name = trim(part.substr(0, eq));
+        std::string param_value = trim(part.substr(eq + 1));
+        
+        // Remove surrounding quotes if present
+        if (param_value.size() >= 2 && param_value.front() == '"' && param_value.back() == '"') {
+          param_value = param_value.substr(1, param_value.size() - 2);
+        }
+        
+        
+        if (param_name == "name") {
+          name = param_value;
+        } else if (param_name == "filename") {
+          filename = param_value;
+        }
+      }
+    }
   }
 
-  // Helper: trim spaces
+private:
+  // Helper function for string operations
   static std::string trim(const std::string &s) {
     size_t start = 0;
     while (start < s.size() && std::isspace(s[start]))
@@ -63,69 +201,6 @@ public:
       --end;
     return s.substr(start, end - start);
   }
-  static void parseContentDisposition(const std::string &val, std::string &name,
-                                      std::string &filename) {
-    name.clear();
-    filename.clear();
-
-    size_t pos = val.find(';');
-    if (pos == std::string::npos) {
-      // just disposition type, ignore
-      return;
-    }
-
-    std::string params = val.substr(pos + 1);
-    size_t start = 0;
-    while (start < params.size()) {
-      // parse param name=value pairs
-      // format param=value or param="value"
-      size_t eq = params.find('=', start);
-      if (eq == std::string::npos)
-        break;
-      std::string param_name = trim(params.substr(start, eq - start));
-      size_t val_start = eq + 1;
-      std::string param_value;
-      if (params[val_start] == '"') {
-        size_t val_end = params.find('"', val_start + 1);
-        if (val_end == std::string::npos)
-          break;
-        param_value = params.substr(val_start + 1, val_end - val_start - 1);
-        start = val_end + 1;
-      } else {
-        size_t val_end = params.find(';', val_start);
-        if (val_end == std::string::npos) {
-          param_value = trim(params.substr(val_start));
-          start = params.size();
-        } else {
-          param_value = trim(params.substr(val_start, val_end - val_start));
-          start = val_end + 1;
-        }
-      }
-
-      if (param_name == "name")
-        name = param_value;
-      else if (param_name == "filename")
-        filename = param_value;
-    }
-  }
-
-private:
-  enum class State { EXPECT_BOUNDARY, READ_HEADERS, READ_DATA, DONE };
-
-  std::string buffer;
-  const std::string boundary_str;
-  const std::string close_boundary;
-  State state;
-
-  // Current part headers and data info
-  std::unordered_map<std::string, std::string> current_headers;
-  std::string current_name;
-  std::string current_filename;
-
-  bool file_open;
-  std::ofstream outfile;
-
-  std::unordered_map<std::string, std::string> form_fields;
 
   // Helper: parse header line "Key: Value"
   static bool parseHeaderLine(const std::string &line, std::string &key,
@@ -189,21 +264,22 @@ private:
       if (line.empty()) {
         // end of headers
         // parse Content-Disposition to get name and filename
-        auto it = current_headers.find("Content-Disposition");
+        auto it = current_headers.find("content-disposition");
         if (it != current_headers.end()) {
           parseContentDisposition(it->second, current_name, current_filename);
-        }
-        if (!current_filename.empty()) {
-          // file part - open file for writing
-          std::string filepath =
-              "./uploads/" + current_filename; // make sure directory exists
-          outfile.open(filepath, std::ios::binary);
-          if (!outfile.is_open()) {
-            std::cerr << "Error opening file for writing: " << filepath << "\n";
-            state = State::DONE;
-            return false;
+          
+          // If this is a file part, open the file for writing
+          if (!current_filename.empty()) {
+            std::string filepath = "./uploads/" + current_filename;
+            outfile.open(filepath, std::ios::binary);
+            if (!outfile.is_open()) {
+              std::cerr << "Error opening file for writing: " << filepath << "\n";
+              state = State::DONE;
+              return false;
+            }
+            file_open = true;
           }
-          file_open = true;
+        } else {
         }
         state = State::READ_DATA;
         return true;
@@ -275,18 +351,29 @@ private:
   }
 
   void writeData(const char *data, size_t len) {
+    if (data == nullptr || len == 0) return;
+
+
+    // Handle file uploads
     if (file_open) {
       outfile.write(data, len);
       if (!outfile) {
-        std::cerr << "Error writing to file\n";
-        state = State::DONE;
+        std::cerr << "[ERROR] Failed writing to file" << std::endl;
+        return;
       }
-    } else {
-      // Accumulate to form field if current_name is set and no filename (normal
-      // form field)
-      if (!current_name.empty() && current_filename.empty()) {
-        form_fields[current_name].append(data, len);
+      return;
+    }
+
+    // Handle form fields
+    if (!current_name.empty()) {
+      std::string value(data, len);
+
+      // Remove any trailing CR/LF
+      while (!value.empty() && (value.back() == '\r' || value.back() == '\n')) {
+        value.pop_back();
       }
+
+      form_fields[current_name] = value;
     }
   }
 
@@ -404,75 +491,58 @@ route("/nas/media/add", media_upload) {
   return OK(connection);
 }
 route("/api/media/add", media_add) {
-  const char *content_type_cstr = mg_get_header(connection, "Content-Type");
-  if (!content_type_cstr) {
-    return Server.Response(connection, 400, "Bad Request",
-                           R"({"message":"Missing Content-Type"})");
-  }
-
-  std::string content_type = content_type_cstr;
-  std::string boundary;
-
-  size_t bpos = content_type.find("boundary=");
-  if (bpos == std::string::npos) {
-    return Server.Response(connection, 400, "Bad Request",
-                           R"({"message":"No boundary in Content-Type"})");
-  }
-  boundary = content_type.substr(bpos + 9); // extract boundary
-
-  const char *content_length_str = mg_get_header(connection, "Content-Length");
-  if (!content_length_str) {
-    return Server.Response(connection, 411, "Length Required",
-                           R"({"message":"Missing Content-Length"})");
-  }
-
-  size_t content_length = std::stoul(content_length_str);
-
-  // Initialize parser
-  MultipartParser parser(boundary);
-
-  std::array<char, 8192> buffer;
-  size_t total_read = 0;
-
-  // Stream and parse the request body
-  while (total_read < content_length) {
-    int r = mg_read(connection, buffer.data(), buffer.size());
-    if (r <= 0) {
-      return Server.Response(connection, 400, "Bad Request",
-                             R"({"message":"Error reading request body"})");
+    std::string boundary;
+    const char* content_type = mg_get_header(connection, "Content-Type");
+    if (content_type != nullptr) {
+        std::string ct(content_type);
+        size_t boundary_pos = ct.find("boundary=");
+        if (boundary_pos != std::string::npos) {
+            boundary = ct.substr(boundary_pos + 9);
+        }
     }
-
-    total_read += r;
-    bool done = parser.parse(buffer.data(), r);
-    if (done)
-      break;
-  }
-
-  // Get parsed form fields
-  std::string folder_path =
-      MultipartParser::trim(parser.getFormField("folder"));
-  std::string filename = MultipartParser::trim(parser.getFormField("filename"));
-
-  if (folder_path.empty() || filename.empty()) {
-    return Server.Response(connection, 400, "Bad Request",
-                           R"({"message":"Missing folder or filename"})");
-  }
-
-  // Sanitize filename to avoid path traversal
-  filename = std::filesystem::path(filename).filename().string();
-
-  std::string full_folder_path = BASE_DIR + "/" + folder_path;
-
-  try {
-    std::filesystem::create_directories(full_folder_path);
-  } catch (const std::exception &ex) {
-    return Server.Response(connection, 500, "Server Error",
-                           R"({"message":"Failed to create target folder"})");
-  }
-
-  // File is already written to disk inside parser, we just confirm success
-  return Server.Response(connection, 200, "Ok",
-                         R"({"message":"Upload successful"})");
+    
+    if (boundary.empty()) {
+        return Server.Response(connection, 400, "Bad Request",
+                             R"({"message":"No boundary found in Content-Type"})");
+    }
+    
+    MultipartParser parser(boundary);
+    std::array<char, BUFFER_SIZE> buffer;
+    
+    while (true) {
+        int bytes_read = mg_read(connection, buffer.data(), buffer.size());
+        if (bytes_read <= 0) break;
+        
+        if (parser.parse(buffer.data(), bytes_read)) {
+            break; // Parsing complete
+        }
+    }
+    
+    std::string folder = parser.getFormField("folder");
+    std::string filename = parser.getFormField("filename");
+   
+    if (folder.empty() || filename.empty()) {
+        std::cerr << "[ERROR] Missing folder or filename field in multipart form" << std::endl;
+        return Server.Response(connection, 400, "Bad Request",
+                             R"({"message":"Missing folder or filename"})");
+    }
+    
+    std::string full_folder_path = BASE_DIR + "/" + folder;
+    try {
+        std::filesystem::create_directories(full_folder_path);
+        std::string upload_path = full_folder_path + "/" + filename;
+        
+        // File should already be saved by MultipartParser to uploads directory
+        // Move it to the final destination
+        std::filesystem::rename("./uploads/" + filename, upload_path);
+        
+        return Server.Response(connection, 200, "Ok",
+                             R"({"message":"Upload successful"})");
+    } catch (const std::exception &ex) {
+        std::cerr << "[ERROR] Failed to handle upload: " << ex.what() << std::endl;
+        return Server.Response(connection, 500, "Server Error",
+                             R"({"message":"Failed to save uploaded file"})");
+    }
 }
 route("/api/delete", delete_function) {
   json post_data = json::parse(Server.Read(connection));

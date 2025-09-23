@@ -123,10 +123,17 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
+
       const form = new FormData();
-      form.append('file', this.fileToUpload);
+      // Ensure field names match backend expectations
       form.append('folder', this.selectedFolder);
       form.append('filename', this.fileToUpload.name);
+      form.append('file', this.fileToUpload, this.fileToUpload.name);
+
+      // Debug: log FormData keys and values
+      for (let pair of form.entries()) {
+        console.log(pair[0]+':', pair[1]);
+      }
 
       this.uploading = true;
 
@@ -240,37 +247,7 @@ document.addEventListener('alpine:init', () => {
     };
     reader.readAsDataURL(file);
   },
-async uploadFile() {
-  if (!this.fileToUpload || !this.selectedFolder) {
-    alert('Please select a folder and file to upload.');
-    return;
-  }
-
-  const form = new FormData();
-  form.append('file', this.fileToUpload);
-  form.append('folder', this.selectedFolder);
-  form.append('filename', this.fileToUpload.name); // Add this line
-
-  try {
-    const res = await fetch('/api/media/add', {
-      method: 'POST',
-      body: form,
-    });
-    const result = await res.json();
-    if (res.ok) {
-      alert('Upload successful!');
-      this.fileToUpload = null;
-      this.localFilePreview = null;
-      const fileInput = document.querySelector('input[type="file"]');
-      if (fileInput) fileInput.value = '';
-      await this.refreshTree();
-    } else {
-      alert('Upload failed: ' + (result.message || 'Unknown error'));
-    }
-  } catch (err) {
-    alert('Upload error: ' + err.message);
-  }
-},
+// ...existing code...
         async refreshTree() {
           try {
             const res = await fetch('/api/folder/lists');
