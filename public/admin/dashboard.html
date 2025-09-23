@@ -455,9 +455,16 @@
 
       async refreshTree() {
         try {
-          const res = await fetch('/api/folder/lists');
-          const data = await res.json();
-          this.treeData = data.find(item => item.type === 'directory') || { contents: [] };
+         
+const res = await fetch('/api/folder/lists');
+const data = await res.json();
+
+if (Array.isArray(data)) {
+  this.treeData = data.find(item => item.type === 'directory') || { contents: [] };
+} else {
+  console.error("Expected array but got:", data);
+  this.treeData = { contents: [] };
+}
         } catch (err) {
           console.error("Failed to refresh folder list:", err);
           this.treeData = { contents: [] };
