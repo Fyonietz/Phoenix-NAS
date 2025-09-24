@@ -9,7 +9,7 @@
 #include <unordered_map>
 using namespace nlohmann;
 
-constexpr size_t BUFFER_SIZE = 8192;
+constexpr size_t BUFFER_SIZE = 64 * 1024;
 std::string BASE_DIR = "public/nas";
 // Helper function to trim whitespace
 static std::string trim(const std::string& s) {
@@ -507,17 +507,16 @@ route("/api/media/add", media_add) {
     }
     
     MultipartParser parser(boundary);
-    std::array<char, BUFFER_SIZE> buffer;
-    
-    while (true) {
-        int bytes_read = mg_read(connection, buffer.data(), buffer.size());
-        if (bytes_read <= 0) break;
-        
-        if (parser.parse(buffer.data(), bytes_read)) {
-            break; // Parsing complete
-        }
+   std::vector<char> buffer(BUFFER_SIZE);
+
+while (true) {
+    int bytes_read = mg_read(connection, buffer.data(), buffer.size());
+    if (bytes_read <= 0) break;
+
+    if (parser.parse(buffer.data(), bytes_read)) {
+        break; // parsing complete
     }
-    
+}    
     std::string folder = parser.getFormField("folder");
     std::string filename = parser.getFormField("filename");
    

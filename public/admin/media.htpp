@@ -1,107 +1,157 @@
-<!DOCTYPE html>
-<html lang="en" x-data="mediaExplorer()" class="h-full">
+<<!DOCTYPE html>
+<html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Media Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+  <style>
+    /* Extra styles for dark mode overrides */
+    body.dark {
+      background-color: #1e1e1e;
+      color: #ddd;
+    }
+    body.dark .bg-white {
+      background-color: #2a2a2a !important;
+    }
+    body.dark .border-gray-300 {
+      border-color: #444 !important;
+    }
+    body.dark .text-gray-500 {
+      color: #888 !important;
+    }
+    /* Add a toggle button position */
+    #darkModeToggle {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 100;
+    }
+  </style>
 </head>
 <body class="h-full bg-gray-100 text-gray-800">
-<div class="h-screen flex flex-col md:flex-row" x-data="mediaExplorer()" x-init="init()">
-  <!-- Desktop Sidebar -->
-  <div class="hidden md:block md:w-1/5 bg-white border-r overflow-auto p-4">
-    <h2 class="text-lg font-semibold mb-4">Folder Tree</h2>
-    <div x-html="treeHtml" class="text-sm leading-6"></div>
-  </div>
-
-  <!-- Mobile: Show button to open folder picker -->
-  <div class="md:hidden p-4 bg-white border-b">
-    <button @click="showMobileTree = true" class="bg-blue-600 text-white px-4 py-2 rounded shadow">
-      Select File
-    </button>
-  </div>
-
-  <!-- Right Preview Panel -->
-  <div class="flex-1 p-4 overflow-auto">
-    <template x-if="selectedFile">
-      <div>
-        <h2 class="text-lg font-semibold mb-4">Preview: <span x-text="selectedFile"></span></h2>
-
-        <!-- Image Preview -->
-        <template x-if="isImage(selectedFile)">
-          <img :src="selectedFile" alt="Preview" class="max-w-full max-h-[500px] border rounded shadow" />
-        </template>
-
-        <!-- Video Preview -->
-        <template x-if="isVideo(selectedFile)">
-          <video :src="selectedFile" controls class="w-full max-w-2xl max-h-[500px] border rounded shadow"></video>
-        </template>
-
-        <!-- 3D Model Preview -->
-        <template x-if="isGLB(selectedFile)">
-          <model-viewer
-            :src="selectedFile"
-            alt="GLB Model"
-            auto-rotate
-            camera-controls
-            background-color="#ffffff"
-            class="w-full h-[500px] border rounded shadow"
-          ></model-viewer>
-        </template>
-
-        <!-- Delete Button -->
-        <div class="mt-4">
-          <button
-            @click="deleteFile"
-            class="bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700">Delete File</button>
-        </div>
-      </div>
-    </template>
-
-    <template x-if="!selectedFile">
-      <p class="text-gray-500">Select a media file to preview it.</p>
-    </template>
-  </div>
-
-  <!-- Mobile Folder Picker Modal -->
-  <div
-    class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4"
-    x-show="showMobileTree"
-    x-transition
+  <!-- Dark mode toggle button -->
+  <button
+    id="darkModeToggle"
+    class="bg-gray-800 text-white px-3 py-1 rounded shadow hover:bg-gray-700 focus:outline-none"
+    aria-label="Toggle dark mode"
   >
-    <div class="bg-white w-full max-w-md rounded-lg shadow-lg overflow-auto max-h-[90vh]">
-      <div class="p-4 border-b flex justify-between items-center">
-        <h3 class="font-semibold text-lg">Select File</h3>
-        <button @click="showMobileTree = false" class="text-gray-500 hover:text-gray-700">&times;</button>
-      </div>
-      <div class="p-4 text-sm">
-        <div x-html="treeHtml"></div>
+    🌙 Dark Mode
+  </button>
+
+  <div id="app" class="h-screen flex flex-col md:flex-row">
+    <!-- Desktop Sidebar -->
+    <div class="hidden md:block md:w-1/5 bg-white border-r overflow-auto p-4">
+      <h2 class="text-lg font-semibold mb-4">Folder Tree</h2>
+      <div id="folderTree" class="text-sm leading-6"></div>
+    </div>
+
+    <!-- Mobile: Show button to open folder picker -->
+    <div class="md:hidden p-4 bg-white border-b">
+      <button id="openTreeBtn" class="bg-blue-600 text-white px-4 py-2 rounded shadow">
+        Select File
+      </button>
+    </div>
+
+    <!-- Right Preview Panel -->
+    <div class="flex-1 p-4 overflow-auto" id="previewPanel">
+      <p class="text-gray-500">Select a media file to preview it.</p>
+    </div>
+
+    <!-- Mobile Folder Picker Modal -->
+    <div
+      id="mobileTreeModal"
+      class="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 hidden"
+    >
+      <div class="bg-white w-full max-w-md rounded-lg shadow-lg overflow-auto max-h-[90vh]">
+        <div class="p-4 border-b flex justify-between items-center">
+          <h3 class="font-semibold text-lg">Select File</h3>
+          <button id="closeTreeBtn" class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+        </div>
+        <div id="mobileFolderTree" class="p-4 text-sm"></div>
       </div>
     </div>
   </div>
-</div>
 
-<script>
-  function mediaExplorer() {
-    return {
-      treeHtml: '',
-      selectedFile: null,
-      showMobileTree: false,
+  <script>
+    (function () {
+      // COOKIE HELPERS
+      function setCookie(name, value, days) {
+        const expires = new Date(Date.now() + days * 864e5).toUTCString();
+        document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
+      }
+      function getCookie(name) {
+        return document.cookie.split('; ').reduce((r, v) => {
+          const parts = v.split('=');
+          return parts[0] === name ? decodeURIComponent(parts[1]) : r
+        }, '');
+      }
 
-      async init() {
+      // DARK MODE TOGGLE
+      const darkModeToggle = document.getElementById('darkModeToggle');
+      const body = document.body;
+
+      function applyDarkMode(isDark) {
+        if (isDark) {
+          body.classList.add('dark');
+          darkModeToggle.textContent = '☀️ Light Mode';
+        } else {
+          body.classList.remove('dark');
+          darkModeToggle.textContent = '🌙 Dark Mode';
+        }
+      }
+
+      // Load saved mode on startup
+      let darkModeEnabled = getCookie('darkMode') === 'true';
+      applyDarkMode(darkModeEnabled);
+
+      darkModeToggle.addEventListener('click', () => {
+        darkModeEnabled = !darkModeEnabled;
+        applyDarkMode(darkModeEnabled);
+        setCookie('darkMode', darkModeEnabled, 30); // Save preference for 30 days
+        // Update 3D viewer background if open
+        updateModelViewerBackground();
+      });
+
+      // 3D viewer background color to match Blender's dark viewport background (approx #313131)
+      const BLENDER_BG_COLOR = '#313131';
+      const LIGHT_BG_COLOR = '#ffffff';
+
+      // Elements we'll need for previewing and folder tree
+      const folderTreeEl = document.getElementById('folderTree');
+      const mobileFolderTreeEl = document.getElementById('mobileFolderTree');
+      const previewPanelEl = document.getElementById('previewPanel');
+      const mobileTreeModalEl = document.getElementById('mobileTreeModal');
+      const openTreeBtn = document.getElementById('openTreeBtn');
+      const closeTreeBtn = document.getElementById('closeTreeBtn');
+
+      let selectedFile = null;
+
+      openTreeBtn.addEventListener('click', () => {
+        mobileTreeModalEl.classList.remove('hidden');
+      });
+
+      closeTreeBtn.addEventListener('click', () => {
+        mobileTreeModalEl.classList.add('hidden');
+      });
+
+      async function init() {
         try {
           const res = await fetch('/api/folder/lists');
           const data = await res.json();
           const root = data.find(d => d.type === 'directory');
-          this.treeHtml = this.buildTreeHTML(root);
+          const treeHtml = buildTreeHTML(root);
+          folderTreeEl.innerHTML = treeHtml;
+          mobileFolderTreeEl.innerHTML = treeHtml;
+          attachTreeEvents();
         } catch (e) {
           console.error('Failed to load folder list:', e);
         }
-      },
+      }
 
-      buildTreeHTML(node, parentPath = '') {
+      function buildTreeHTML(node, parentPath = '') {
         if (!node || !node.contents) return '';
 
         let html = '<ul class="ml-4 border-l border-dotted border-gray-300 pl-2">';
@@ -110,17 +160,15 @@
           if (child.type === 'directory') {
             html += `
               <li class="mt-1">
-                <div @click="$el.nextElementSibling.classList.toggle('hidden')" class="cursor-pointer font-medium">
-                  ▶ ${child.name}
-                </div>
+                <div class="cursor-pointer font-medium toggle-folder">▶ ${child.name}</div>
                 <div class="hidden">
-                  ${this.buildTreeHTML(child, fullPath)}
+                  ${buildTreeHTML(child, fullPath)}
                 </div>
               </li>
             `;
-          } else if (this.isMediaFile(child.name)) {
+          } else if (isMediaFile(child.name)) {
             html += `
-              <li class="cursor-pointer mt-1 hover:text-blue-600" @click="selectedFile='/nas${fullPath}'; showMobileTree=false;">
+              <li class="cursor-pointer mt-1 hover:text-blue-600 file-item" data-path="/nas${fullPath}">
                 📄 ${child.name}
               </li>
             `;
@@ -128,9 +176,26 @@
         });
         html += '</ul>';
         return html;
-      },
+      }
 
-      isMediaFile(filename) {
+      function attachTreeEvents() {
+        document.querySelectorAll('.toggle-folder').forEach(el => {
+          el.addEventListener('click', () => {
+            const next = el.nextElementSibling;
+            if (next) next.classList.toggle('hidden');
+          });
+        });
+
+        document.querySelectorAll('.file-item').forEach(el => {
+          el.addEventListener('click', () => {
+            selectedFile = el.dataset.path;
+            mobileTreeModalEl.classList.add('hidden');
+            renderPreview();
+          });
+        });
+      }
+
+      function isMediaFile(filename) {
         const ext = filename.toLowerCase();
         return (
           ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.gif') ||
@@ -138,28 +203,89 @@
           ext.endsWith('.mp4') || ext.endsWith('.webm') || ext.endsWith('.mov') ||
           ext.endsWith('.glb')
         );
-      },
+      }
 
-      isImage(file) {
+      function isImage(file) {
         return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file);
-      },
+      }
 
-      isVideo(file) {
+      function isVideo(file) {
         return /\.(mp4|webm|mov)$/i.test(file);
-      },
+      }
 
-      isGLB(file) {
+      function isGLB(file) {
         return /\.glb$/i.test(file);
-      },
+      }
 
-      async deleteFile() {
-        if (!this.selectedFile) return;
+      function updateModelViewerBackground() {
+        const modelViewer = previewPanelEl.querySelector('model-viewer');
+        if (modelViewer) {
+          modelViewer.setAttribute('background-color', darkModeEnabled ? BLENDER_BG_COLOR : LIGHT_BG_COLOR);
+        }
+      }
 
+      function renderPreview() {
+        previewPanelEl.innerHTML = '';
+
+        if (!selectedFile) {
+          previewPanelEl.innerHTML = '<p class="text-gray-500">Select a media file to preview it.</p>';
+          return;
+        }
+
+        const fileName = selectedFile.split('/').pop();
+
+        const container = document.createElement('div');
+
+        const title = document.createElement('h2');
+        title.className = 'text-lg font-semibold mb-4';
+        title.innerHTML = `Preview: <span>${fileName}</span>`;
+        container.appendChild(title);
+
+        let mediaEl = null;
+
+        if (isImage(selectedFile)) {
+          mediaEl = document.createElement('img');
+          mediaEl.src = selectedFile;
+          mediaEl.alt = 'Preview';
+          mediaEl.className = 'max-w-full max-h-[500px] border rounded shadow';
+        } else if (isVideo(selectedFile)) {
+          mediaEl = document.createElement('video');
+          mediaEl.src = selectedFile;
+          mediaEl.controls = true;
+          mediaEl.className = 'w-full max-w-2xl max-h-[500px] border rounded shadow';
+        } else if (isGLB(selectedFile)) {
+          mediaEl = document.createElement('model-viewer');
+          mediaEl.setAttribute('src', selectedFile);
+          mediaEl.setAttribute('alt', 'GLB Model');
+          mediaEl.setAttribute('auto-rotate', '');
+          mediaEl.setAttribute('camera-controls', '');
+          mediaEl.setAttribute('background-color', darkModeEnabled ? BLENDER_BG_COLOR : LIGHT_BG_COLOR);
+          mediaEl.className = 'w-full h-[500px] border rounded shadow';
+        }
+
+        if (mediaEl) container.appendChild(mediaEl);
+
+        // Delete button
+        const deleteBtnWrapper = document.createElement('div');
+        deleteBtnWrapper.className = 'mt-4';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700';
+        deleteBtn.textContent = 'Delete File';
+        deleteBtn.addEventListener('click', deleteFile);
+
+        deleteBtnWrapper.appendChild(deleteBtn);
+        container.appendChild(deleteBtnWrapper);
+
+        previewPanelEl.appendChild(container);
+      }
+
+      async function deleteFile() {
+        if (!selectedFile) return;
         if (!confirm('Are you sure you want to delete this file?')) return;
 
         try {
-          // Assuming your API expects path without /nas prefix:
-          const filePath = this.selectedFile.replace(/^\/nas/, '');
+          const filePath = selectedFile.replace(/^\/nas/, '');
 
           const res = await fetch('/api/delete', {
             method: 'POST',
@@ -169,8 +295,9 @@
 
           if (res.ok) {
             alert('File deleted successfully');
-            this.selectedFile = null;
-            await this.init(); // reload folder tree
+            selectedFile = null;
+            renderPreview();
+            await init();
           } else {
             const error = await res.text();
             alert(`Failed to delete file: ${error}`);
@@ -179,9 +306,16 @@
           alert(`Error deleting file: ${err.message}`);
         }
       }
-    };
-  }
-</script>
+
+      // Start app
+      init();
+
+      // Ensure model viewer background is updated if toggling after loading model
+      new MutationObserver(() => {
+        updateModelViewerBackground();
+      }).observe(previewPanelEl, { childList: true });
+    })();
+  </script>
 </body>
 </html>
 

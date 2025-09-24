@@ -58,18 +58,20 @@ void updateConfig() {
   memset(&Config::callbacks, 0, sizeof(Config::callbacks));
 
   // Set up server configuration with correct port format
+
   const char *options[] = {"document_root",
                            Config::root.c_str(),
                            "listening_ports",
-                           Config::port.c_str(), // <-- use config value!
+                           Config::port.c_str(),
                            "num_threads",
                            Config::threads.c_str(),
                            "enable_keep_alive",
                            Config::keep_alive.c_str(),
                            "index_files",
                            "layout.html",
+                           "max_request_size","2147483647",
+"request_timeout_ms", "3600000",
                            nullptr};
-
   // Print configuration for debugging
   std::cout << Global::info << "Starting server with configuration:\n";
   for (int i = 0; options[i] != nullptr; i += 2) {
