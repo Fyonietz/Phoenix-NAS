@@ -32,7 +32,6 @@
   </style>
 </head>
 <body class="h-full bg-gray-100 text-gray-800">
-  <!-- Dark mode toggle button -->
   <button
     id="darkModeToggle"
     class="bg-gray-800 text-white px-3 py-1 rounded shadow hover:bg-gray-700 focus:outline-none"

@@ -20,6 +20,8 @@ const elements = {
     uploadBtn: document.getElementById('uploadBtn'),
     previewContainer: document.getElementById('previewContainer'),
     loadingOverlay: document.getElementById('loading-overlay'),
+    progressBar: document.getElementById('progress-bar'),
+    progressText: document.getElementById('progress-text'),
     newFolderPath: document.getElementById('newFolderPath'),
     createFolderBtn: document.getElementById('createFolderBtn'),
     folderTree: document.getElementById('folderTree')
@@ -118,7 +120,7 @@ function setFileToUpload(file) {
 }
 
 function updateUploadButton() {
-    elements.uploadBtn.disabled = !state.fileToUpload || !state.selectedFolder;
+    elements.uploadBtn.disabled = !state.fileToUpload || !state.selectedFolder || state.uploading;
 }
 
 function updatePreview(file) {
@@ -152,7 +154,35 @@ function createPreviewElement(file, dataUrl) {
         modelViewer.className = 'w-full h-[400px] border rounded shadow';
         return modelViewer;
     }
-    return document.createElement('p').textContent = 'No preview available';
+    const p = document.createElement('p');
+    p.textContent = 'No preview available';
+    return p;
+}
+
+// Progress Functions
+function showUploadProgress() {
+    elements.loadingOverlay.classList.remove('hidden');
+    elements.loadingOverlay.style.display = 'flex';
+    updateProgress(0);
+}
+
+function hideUploadProgress() {
+    elements.loadingOverlay.classList.add('hidden');
+    elements.loadingOverlay.style.display = 'none';
+    resetProgress();
+}
+
+function updateProgress(percent) {
+    if (elements.progressBar) {
+        elements.progressBar.style.width = `${percent}%`;
+    }
+    if (elements.progressText) {
+        elements.progressText.textContent = `${Math.round(percent)}%`;
+    }
+}
+
+function resetProgress() {
+    updateProgress(0);
 }
 
 // Folder Picker Functionality
@@ -340,7 +370,7 @@ async function deleteDirectory(path) {
     }
 }
 
-// File Upload Function
+// File Upload Function with Progress
 async function uploadFile() {
     if (!state.fileToUpload || !state.selectedFolder) {
         alert('Please select both a folder and a file to upload');
@@ -353,30 +383,71 @@ async function uploadFile() {
     formData.append('file', state.fileToUpload);
 
     state.uploading = true;
-    elements.loadingOverlay.classList.remove('hidden');
-    elements.loadingOverlay.style.display = 'flex';
-    elements.uploadBtn.disabled = true;
+    showUploadProgress();
+    updateUploadButton();
 
     try {
-        const response = await fetch('/api/media/add', {
-            method: 'POST',
-            body: formData
+        // Create XMLHttpRequest for progress tracking
+        const xhr = new XMLHttpRequest();
+        
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                updateProgress(percentComplete);
+            }
         });
 
-        const result = await response.json();
-        if (response.ok) {
-            alert('✅ Upload successful!');
-            resetUploadForm();
-            await loadFolderTree();
-        } else {
-            alert('❌ Upload failed: ' + (result.message || 'Unknown error'));
-        }
+        // Handle completion
+        xhr.addEventListener('load', () => {
+            try {
+                const result = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    updateProgress(100);
+                    setTimeout(() => {
+                        alert('✅ Upload successful!');
+                        resetUploadForm();
+                        loadFolderTree();
+                        hideUploadProgress();
+                    }, 500);
+                } else {
+                    throw new Error(result.message || 'Upload failed');
+                }
+            } catch (error) {
+                alert('❌ Upload failed: ' + error.message);
+                hideUploadProgress();
+            } finally {
+                state.uploading = false;
+                updateUploadButton();
+            }
+        });
+
+        // Handle errors
+        xhr.addEventListener('error', () => {
+            alert('❌ Upload error: Network error occurred');
+            state.uploading = false;
+            hideUploadProgress();
+            updateUploadButton();
+        });
+
+        // Handle timeout
+        xhr.addEventListener('timeout', () => {
+            alert('❌ Upload error: Request timed out');
+            state.uploading = false;
+            hideUploadProgress();
+            updateUploadButton();
+        });
+
+        // Start upload
+        xhr.open('POST', '/api/media/add');
+        xhr.timeout = 300000; // 5 minutes timeout
+        xhr.send(formData);
+
     } catch (error) {
         alert('❌ Upload error: ' + error.message);
-    } finally {
         state.uploading = false;
-        elements.loadingOverlay.classList.add('hidden');
-        elements.uploadBtn.disabled = false;
+        hideUploadProgress();
+        updateUploadButton();
     }
 }
 

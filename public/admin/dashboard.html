@@ -14,6 +14,18 @@
     .hidden {
       display: none;
     }
+    .progress-container {
+      background-color: #e5e7eb;
+      border-radius: 0.5rem;
+      height: 1rem;
+      overflow: hidden;
+    }
+    .progress-bar {
+      background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+      height: 100%;
+      transition: width 0.3s ease-in-out;
+      border-radius: 0.5rem;
+    }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -58,13 +70,34 @@
         <div class="max-w-3xl mx-auto py-10 px-4">
           <!-- Upload Form -->
           <div class="bg-white p-6 rounded shadow mb-6 relative">
-            <!-- Loading Overlay -->
-            <div id="loading-overlay" class="absolute inset-0 bg-white bg-opacity-80 items-center justify-center z-50 rounded hidden">
-              <svg class="animate-spin h-10 w-10 text-blue-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-              </svg>
-              <span class="text-blue-700 font-semibold text-lg">Uploading...</span>
+            <!-- Loading Overlay with Progress Bar -->
+            <div id="loading-overlay" class="absolute inset-0 bg-white bg-opacity-95 flex-col items-center justify-center z-50 rounded hidden">
+              <div class="text-center">
+                <!-- Upload Icon -->
+                <div class="mb-4">
+                  <svg class="w-16 h-16 mx-auto text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                  </svg>
+                </div>
+                
+                <!-- Progress Text -->
+                <h3 class="text-lg font-semibold text-blue-700 mb-2">Uploading File...</h3>
+                <p class="text-sm text-gray-600 mb-4">Please wait while your file is being uploaded</p>
+                
+                <!-- Progress Bar -->
+                <div class="w-64 mx-auto mb-3">
+                  <div class="progress-container">
+                    <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                  </div>
+                </div>
+                
+                <!-- Progress Percentage -->
+                <div class="flex justify-between text-sm text-gray-600 w-64 mx-auto">
+                  <span>Progress</span>
+                  <span id="progress-text">0%</span>
+                </div>
+              </div>
             </div>
 
             <h2 class="text-xl font-semibold mb-4">Upload a File</h2>
@@ -98,7 +131,7 @@
             </div>
 
             <!-- Upload Button -->
-            <button id="uploadBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50" disabled>
+            <button id="uploadBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
               Upload
             </button>
           </div>
@@ -144,6 +177,7 @@
     </footer>
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js"></script> 
+
 </body>
 </html>
