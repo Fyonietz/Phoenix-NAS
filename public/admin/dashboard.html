@@ -116,17 +116,17 @@
               <div id="folder-picker" class="border mt-2 rounded p-2 bg-white shadow-md absolute z-20 w-full hidden"></div>
             </div>
 
-            <!-- File Picker -->
+            <!-- Multi File Picker -->
             <div class="mb-4">
-              <input type="file" id="fileInput" />
+              <input type="file" id="fileInput" multiple accept=".jpg,.png,.gif,.mp4,.fbx,.glb" />
             </div>
 
             <!-- Drag and Drop File Picker -->
             <div id="dropZone"
                  class="mb-4 flex items-center justify-center border-2 border-dashed rounded cursor-pointer h-32 text-gray-500 transition-colors border-gray-300 bg-white">
               <div>
-                <p class="text-center">Drag & drop a file here</p>
-                <p class="text-xs text-gray-400 mt-1">Supported types: images, videos, glb</p>
+                <p class="text-center">Drag & drop files here</p>
+                <p class="text-xs text-gray-400 mt-1">Supported types: images, videos, .fbx, .glb</p>
               </div>
             </div>
 
@@ -181,3 +181,4 @@
 
 </body>
 </html>
+

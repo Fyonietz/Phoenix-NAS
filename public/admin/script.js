@@ -1,9 +1,10 @@
 // Global state
 const state = {
     selectedFolder: null,
-    fileToUpload: null,
+    filesToUpload: [], // Changed from single file to array
     currentView: 'dashboard',
-    uploading: false
+    uploading: false,
+    uploadQueue: []
 };
 
 // DOM Elements
@@ -79,17 +80,20 @@ function changeView(view) {
 
 // File Upload Functionality
 function initializeFileUpload() {
+    // Enable multiple file selection
+    elements.fileInput.setAttribute('multiple', 'multiple');
+    
     elements.fileInput.addEventListener('change', handleFileSelect);
     elements.dropZone.addEventListener('dragover', handleDragOver);
     elements.dropZone.addEventListener('dragleave', handleDragLeave);
     elements.dropZone.addEventListener('drop', handleDrop);
-    elements.uploadBtn.addEventListener('click', uploadFile);
+    elements.uploadBtn.addEventListener('click', uploadFiles);
 }
 
 function handleFileSelect(event) {
-    const file = event.target.files[0];
-    if (file) {
-        setFileToUpload(file);
+    const files = Array.from(event.target.files);
+    if (files.length > 0) {
+        addFilesToUpload(files);
     }
 }
 
@@ -107,55 +111,113 @@ function handleDrop(e) {
     e.preventDefault();
     elements.dropZone.classList.remove('border-blue-500', 'bg-blue-50');
     
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-        setFileToUpload(files[0]);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+        addFilesToUpload(files);
     }
 }
 
-function setFileToUpload(file) {
-    state.fileToUpload = file;
+function addFilesToUpload(files) {
+    state.filesToUpload = [...state.filesToUpload, ...files];
     updateUploadButton();
-    updatePreview(file);
+    updatePreviewList();
+}
+
+function removeFileFromUpload(index) {
+    state.filesToUpload.splice(index, 1);
+    updateUploadButton();
+    updatePreviewList();
 }
 
 function updateUploadButton() {
-    elements.uploadBtn.disabled = !state.fileToUpload || !state.selectedFolder || state.uploading;
+    const fileCount = state.filesToUpload.length;
+    elements.uploadBtn.disabled = fileCount === 0 || !state.selectedFolder || state.uploading;
+    elements.uploadBtn.textContent = fileCount > 0 ? `Upload ${fileCount} file${fileCount > 1 ? 's' : ''}` : 'Upload';
 }
 
-function updatePreview(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const previewContent = createPreviewElement(file, e.target.result);
-        elements.previewContainer.innerHTML = '';
-        elements.previewContainer.appendChild(previewContent);
-    };
-    reader.readAsDataURL(file);
+function updatePreviewList() {
+    if (state.filesToUpload.length === 0) {
+        elements.previewContainer.innerHTML = '<p class="text-gray-500">No files selected.</p>';
+        return;
+    }
+
+    const container = document.createElement('div');
+    container.className = 'space-y-4';
+
+    state.filesToUpload.forEach((file, index) => {
+        const fileCard = document.createElement('div');
+        fileCard.className = 'border rounded-lg p-3 bg-white shadow-sm';
+        
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between mb-2';
+        
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'flex items-center space-x-2';
+        
+        const icon = document.createElement('span');
+        icon.textContent = getFileIcon(file.name);
+        icon.className = 'text-2xl';
+        
+        const details = document.createElement('div');
+        details.innerHTML = `
+            <div class="font-medium text-sm">${file.name}</div>
+            <div class="text-xs text-gray-500">${formatFileSize(file.size)}</div>
+        `;
+        
+        fileInfo.appendChild(icon);
+        fileInfo.appendChild(details);
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '✕';
+        removeBtn.className = 'text-red-500 hover:text-red-700 font-bold text-lg px-2 py-1';
+        removeBtn.addEventListener('click', () => removeFileFromUpload(index));
+        
+        header.appendChild(fileInfo);
+        header.appendChild(removeBtn);
+        fileCard.appendChild(header);
+        
+        // Add preview for supported formats
+        if (isImage(file.name) || isVideo(file.name) || is3DModel(file.name)) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const preview = createPreviewElement(file, e.target.result);
+                preview.className = 'mt-2 ' + preview.className;
+                fileCard.appendChild(preview);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        container.appendChild(fileCard);
+    });
+
+    elements.previewContainer.innerHTML = '';
+    elements.previewContainer.appendChild(container);
 }
 
 function createPreviewElement(file, dataUrl) {
     if (isImage(file.name)) {
         const img = document.createElement('img');
         img.src = dataUrl;
-        img.className = 'max-w-full max-h-[400px] border rounded shadow';
+        img.className = 'max-w-full max-h-[200px] border rounded shadow';
         return img;
     } else if (isVideo(file.name)) {
         const video = document.createElement('video');
         video.src = dataUrl;
         video.controls = true;
-        video.className = 'max-w-full max-h-[400px] border rounded shadow';
+        video.className = 'max-w-full max-h-[200px] border rounded shadow';
         return video;
-    } else if (isGLB(file.name)) {
+    } else if (is3DModel(file.name)) {
         const modelViewer = document.createElement('model-viewer');
         modelViewer.src = dataUrl;
         modelViewer.setAttribute('auto-rotate', '');
         modelViewer.setAttribute('camera-controls', '');
         modelViewer.style.backgroundColor = '#fff';
-        modelViewer.className = 'w-full h-[400px] border rounded shadow';
+        modelViewer.className = 'w-full h-[200px] border rounded shadow';
         return modelViewer;
     }
     const p = document.createElement('p');
     p.textContent = 'No preview available';
+    p.className = 'text-gray-500 text-sm';
     return p;
 }
 
@@ -172,12 +234,16 @@ function hideUploadProgress() {
     resetProgress();
 }
 
-function updateProgress(percent) {
+function updateProgress(percent, currentFile = '', currentIndex = 0, totalFiles = 0) {
     if (elements.progressBar) {
         elements.progressBar.style.width = `${percent}%`;
     }
     if (elements.progressText) {
-        elements.progressText.textContent = `${Math.round(percent)}%`;
+        if (totalFiles > 1) {
+            elements.progressText.textContent = `Uploading ${currentIndex}/${totalFiles}: ${currentFile} (${Math.round(percent)}%)`;
+        } else {
+            elements.progressText.textContent = `${Math.round(percent)}%`;
+        }
     }
 }
 
@@ -370,31 +436,75 @@ async function deleteDirectory(path) {
     }
 }
 
-// File Upload Function with Progress
-async function uploadFile() {
-    if (!state.fileToUpload || !state.selectedFolder) {
-        alert('Please select both a folder and a file to upload');
+// Multi-File Upload Function with Progress
+async function uploadFiles() {
+    if (state.filesToUpload.length === 0 || !state.selectedFolder) {
+        alert('Please select both a folder and files to upload');
         return;
     }
-
-    const formData = new FormData();
-    formData.append('folder', state.selectedFolder);
-    formData.append('filename', state.fileToUpload.name);
-    formData.append('file', state.fileToUpload);
 
     state.uploading = true;
     showUploadProgress();
     updateUploadButton();
 
-    try {
-        // Create XMLHttpRequest for progress tracking
+    const totalFiles = state.filesToUpload.length;
+    let successCount = 0;
+    let failCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < totalFiles; i++) {
+        const file = state.filesToUpload[i];
+        
+        try {
+            const result = await uploadSingleFile(file, i + 1, totalFiles);
+            if (result.success) {
+                successCount++;
+            } else {
+                failCount++;
+                errors.push(`${file.name}: ${result.error}`);
+            }
+        } catch (error) {
+            failCount++;
+            errors.push(`${file.name}: ${error.message}`);
+        }
+    }
+
+    state.uploading = false;
+    hideUploadProgress();
+    
+    // Show results
+    let message = `Upload complete!\n✅ ${successCount} successful`;
+    if (failCount > 0) {
+        message += `\n❌ ${failCount} failed`;
+        if (errors.length > 0) {
+            message += `\n\nErrors:\n${errors.join('\n')}`;
+        }
+    }
+    
+    alert(message);
+    
+    if (successCount > 0) {
+        resetUploadForm();
+        loadFolderTree();
+    }
+    
+    updateUploadButton();
+}
+
+function uploadSingleFile(file, currentIndex, totalFiles) {
+    return new Promise((resolve) => {
+        const formData = new FormData();
+        formData.append('folder', state.selectedFolder);
+        formData.append('filename', file.name);
+        formData.append('file', file);
+
         const xhr = new XMLHttpRequest();
         
         // Track upload progress
         xhr.upload.addEventListener('progress', (e) => {
             if (e.lengthComputable) {
                 const percentComplete = (e.loaded / e.total) * 100;
-                updateProgress(percentComplete);
+                updateProgress(percentComplete, file.name, currentIndex, totalFiles);
             }
         });
 
@@ -403,58 +513,36 @@ async function uploadFile() {
             try {
                 const result = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    updateProgress(100);
-                    setTimeout(() => {
-                        alert('✅ Upload successful!');
-                        resetUploadForm();
-                        loadFolderTree();
-                        hideUploadProgress();
-                    }, 500);
+                    resolve({ success: true });
                 } else {
-                    throw new Error(result.message || 'Upload failed');
+                    resolve({ success: false, error: result.message || 'Upload failed' });
                 }
             } catch (error) {
-                alert('❌ Upload failed: ' + error.message);
-                hideUploadProgress();
-            } finally {
-                state.uploading = false;
-                updateUploadButton();
+                resolve({ success: false, error: error.message });
             }
         });
 
         // Handle errors
         xhr.addEventListener('error', () => {
-            alert('❌ Upload error: Network error occurred');
-            state.uploading = false;
-            hideUploadProgress();
-            updateUploadButton();
+            resolve({ success: false, error: 'Network error occurred' });
         });
 
         // Handle timeout
         xhr.addEventListener('timeout', () => {
-            alert('❌ Upload error: Request timed out');
-            state.uploading = false;
-            hideUploadProgress();
-            updateUploadButton();
+            resolve({ success: false, error: 'Request timed out' });
         });
 
         // Start upload
         xhr.open('POST', '/api/media/add');
         xhr.timeout = 300000; // 5 minutes timeout
         xhr.send(formData);
-
-    } catch (error) {
-        alert('❌ Upload error: ' + error.message);
-        state.uploading = false;
-        hideUploadProgress();
-        updateUploadButton();
-    }
+    });
 }
 
 function resetUploadForm() {
-    state.fileToUpload = null;
+    state.filesToUpload = [];
     elements.fileInput.value = '';
-    elements.previewContainer.innerHTML = '<p class="text-gray-500">No file selected.</p>';
+    elements.previewContainer.innerHTML = '<p class="text-gray-500">No files selected.</p>';
     updateUploadButton();
 }
 
@@ -467,6 +555,29 @@ function isVideo(filename) {
     return /\.(mp4|webm|mov)$/i.test(filename);
 }
 
+function is3DModel(filename) {
+    return /\.(glb|fbx)$/i.test(filename);
+}
+
 function isGLB(filename) {
     return /\.glb$/i.test(filename);
+}
+
+function isFBX(filename) {
+    return /\.fbx$/i.test(filename);
+}
+
+function getFileIcon(filename) {
+    if (isImage(filename)) return '🖼️';
+    if (isVideo(filename)) return '🎬';
+    if (is3DModel(filename)) return '🎮';
+    return '📄';
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
